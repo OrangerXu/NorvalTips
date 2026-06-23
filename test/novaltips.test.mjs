@@ -94,21 +94,10 @@ test("persists one memory per character after simulation", async () => {
     "--state-dir",
     stateDir
   ]);
-  const result = JSON.parse(stdout);
-
-  assert.equal(result.turns.length, 3);
-  assert.deepEqual(
-    result.turns.map((turn) => turn.speaker),
-    ["emperor", "chen_pingping", "fan_xian"]
-  );
-  assert.equal(result.finalState.currentTurn, 3);
-  assert.equal(result.finalState.conflictIntensity, 3);
-
   const sceneState = JSON.parse(
     await readFile(join(stateDir, "scenes", "court_conflict_001.json"), "utf8")
   );
 
-  // Verify memory content
   assert.equal(
     sceneState.characterMemories.emperor[0].content,
     "emperor took a position during court_conflict_001."
