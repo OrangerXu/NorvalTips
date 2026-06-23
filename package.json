@@ -1,0 +1,23 @@
+{
+  "name": "novaltips-pi",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Pi-based narrative agent workspace for long-form web novels and IP interaction.",
+  "scripts": {
+    "cli": "node bin/novaltips.mjs",
+    "test": "node --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "demo:scene": "node bin/novaltips.mjs simulate-scene examples/qingyu-like/scene-court-conflict.json",
+    "frontend": "cd frontend && pip install -r requirements.txt && streamlit run app.py"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  },
+  "pi": {
+    "extension": "./dist/index.js",
+    "skills": "./skills"
+  }
+}
