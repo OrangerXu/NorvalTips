@@ -96,18 +96,21 @@ test("memory-enhanced simulation maintains context across turns", async () => {
   ]);
   const result = JSON.parse(stdout);
 
-  assert.ok(result.turns.length > 0);
+  assert.equal(result.turns.length, 3);
+  assert.deepEqual(
+    result.turns.map((turn) => turn.speaker),
+    ["emperor", "chen_pingping", "fan_xian"]
+  );
+  assert.equal(result.finalState.currentTurn, 3);
+  assert.equal(result.finalState.conflictIntensity, 3);
 
   const sceneState = JSON.parse(
     await readFile(join(stateDir, "scenes", "court_conflict_001.json"), "utf8")
   );
 
-  for (const participant of result.turns.map(t => t.speaker)) {
-    assert.ok(
-      sceneState.characterMemories[participant]?.length > 0,
-      `Expected memories for ${participant}`
-    );
-  }
+  assert.equal(sceneState.characterMemories.emperor.length, 1);
+  assert.equal(sceneState.characterMemories.chen_pingping.length, 1);
+  assert.equal(sceneState.characterMemories.fan_xian.length, 1);
 });
 
 test("keeps a direct mention pending until the character responds", async () => {
