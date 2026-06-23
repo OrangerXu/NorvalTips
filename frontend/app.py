@@ -1,7 +1,6 @@
 import streamlit as st
 import json
 import subprocess
-import os
 import pandas as pd
 from pathlib import Path
 
@@ -9,17 +8,18 @@ st.set_page_config(page_title="NovalTips Dashboard", layout="wide")
 
 st.title("NovalTips 叙事代理工作区")
 
-# Configuration
+# Configuration - resolve paths relative to repo root (parent of frontend/)
+_REPO_ROOT = str(Path(__file__).parent.parent)
 WORLD_PATH = st.sidebar.text_input("World JSON Path", "examples/qingyu-like/world.json")
 STATE_DIR = st.sidebar.text_input("State Directory", ".novaltips/state")
-CLI_PATH = "node bin/novaltips.mjs"
+CLI_PATH = str(Path(_REPO_ROOT) / "bin" / "novaltips.mjs")
 
 def run_cli(command, *args):
     """Run NovalTips CLI command and return output."""
-    cmd = f"{CLI_PATH} {command} {' '.join(args)}"
+    cmd_list = ["node", CLI_PATH, command, *args]
     try:
         result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, cwd=os.getcwd()
+            cmd_list, capture_output=True, text=True, cwd=_REPO_ROOT
         )
         if result.returncode == 0:
             return result.stdout
@@ -30,6 +30,7 @@ def run_cli(command, *args):
         st.error(f"Failed to run CLI: {e}")
         return None
 
+@st.cache_data
 def load_json_file(path):
     """Load and parse a JSON file."""
     try:
@@ -66,7 +67,7 @@ page = st.sidebar.radio("导航", [
 if page == "World Overview":
     st.header("World Overview")
     
-    world_data = load_json_file(WORLD_PATH)
+    world_data = load_json_file(str(Path(_REPO_ROOT) / WORLD_PATH))
     if world_data:
         # Facts table
         st.subheader("World Facts")
@@ -112,7 +113,7 @@ if page == "World Overview":
 elif page == "Character Explorer":
     st.header("Character Explorer")
     
-    world_data = load_json_file(WORLD_PATH)
+    world_data = load_json_file(str(Path(_REPO_ROOT) / WORLD_PATH))
     if world_data:
         skills = world_data.get("skills", [])
         if skills:
@@ -195,7 +196,7 @@ elif page == "Scene Simulator":
     st.header("Scene Simulator")
     
     # Load scene file
-    scene_files = list(Path("examples").glob("**/*.json"))
+    scene_files = list(Path(_REPO_ROOT, "examples").glob("**/*.json"))
     scene_files = [f for f in scene_files if "scene" in f.name.lower()]
     
     if scene_files:
@@ -279,7 +280,7 @@ elif page == "Memory Viewer":
     st.header("Memory Viewer")
     
     # Load scene state files
-    scenes_dir = Path(STATE_DIR) / "scenes"
+    scenes_dir = Path(_REPO_ROOT, STATE_DIR) / "scenes"
     if scenes_dir.exists():
         scene_files = list(scenes_dir.glob("*.json"))
         
@@ -330,8 +331,8 @@ elif page == "Memory Viewer":
     
     # Turn logs
     st.subheader("Turn Logs")
-    turn_log_path = Path(STATE_DIR) / "turn_logs.jsonl"
-    llm_turn_log_path = Path(STATE_DIR) / "llm_turn_logs.jsonl"
+    turn_log_path = Path(_REPO_ROOT, STATE_DIR) / "turn_logs.jsonl"
+    llm_turn_log_path = Path(_REPO_ROOT, STATE_DIR) / "llm_turn_logs.jsonl"
     
     log_type = st.radio("Log Type", ["Standard", "LLM"])
     log_path = llm_turn_log_path if log_type == "LLM" else turn_log_path
@@ -355,7 +356,7 @@ elif page == "Evaluation Reports":
     st.header("Evaluation Reports")
     
     # Check for baseline files
-    baselines_dir = Path("baselines")
+    baselines_dir = Path(_REPO_ROOT, "baselines")
     if baselines_dir.exists():
         baseline_files = list(baselines_dir.glob("*.json"))
         
@@ -403,7 +404,7 @@ elif page == "Evaluation Reports":
     
     # Last validation results
     st.subheader("Last LLM Validation")
-    validation_path = Path(STATE_DIR) / "last_llm_validation.json"
+    validation_path = Path(_REPO_ROOT, STATE_DIR) / "last_llm_validation.json"
     if validation_path.exists():
         validation_data = load_json_file(str(validation_path))
         if validation_data:
