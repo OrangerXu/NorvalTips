@@ -287,12 +287,12 @@ async function simulateScene(world, scene, stateDir) {
   return result;
 }
 
-async function llmSimulateScene(world, scene, stateDir) {
+async function llmSimulateScene(world, scene, stateDir, worldStore) {
   const sceneStore = new SceneStateStore(stateDir);
   let sceneState = await sceneStore.load(scene);
   const startingTurn = sceneState.currentTurn;
   const turns = [];
-  const memoryManager = createMemoryManager({ worldStore: store });
+  const memoryManager = createMemoryManager({ worldStore });
   const sessionId = scene.sceneId;
 
   for (let offset = 1; offset <= scene.maxTurns; offset += 1) {
@@ -515,7 +515,7 @@ async function main() {
   if (command === "llm-simulate-scene") {
     const scenePath = args[0];
     const scene = await loadJson(scenePath);
-    console.log(JSON.stringify(await llmSimulateScene(world, scene, stateDir), null, 2));
+    console.log(JSON.stringify(await llmSimulateScene(world, scene, stateDir, store), null, 2));
     return;
   }
 
