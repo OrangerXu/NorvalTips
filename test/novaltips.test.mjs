@@ -86,7 +86,7 @@ test("continues turn numbering from persisted scene state", async () => {
   assert.equal(second.finalState.conflictIntensity, 6);
 });
 
-test("memory-enhanced simulation maintains context across turns", async () => {
+test("persists one memory per character after simulation", async () => {
   const stateDir = await mkdtemp(join(tmpdir(), "novaltips-memory-"));
   const stdout = await run([
     "simulate-scene",
@@ -108,9 +108,19 @@ test("memory-enhanced simulation maintains context across turns", async () => {
     await readFile(join(stateDir, "scenes", "court_conflict_001.json"), "utf8")
   );
 
-  assert.equal(sceneState.characterMemories.emperor.length, 1);
-  assert.equal(sceneState.characterMemories.chen_pingping.length, 1);
-  assert.equal(sceneState.characterMemories.fan_xian.length, 1);
+  // Verify memory content
+  assert.equal(
+    sceneState.characterMemories.emperor[0].content,
+    "emperor took a position during court_conflict_001."
+  );
+  assert.equal(
+    sceneState.characterMemories.chen_pingping[0].content,
+    "chen_pingping took a position during court_conflict_001."
+  );
+  assert.equal(
+    sceneState.characterMemories.fan_xian[0].content,
+    "fan_xian took a position during court_conflict_001."
+  );
 });
 
 test("keeps a direct mention pending until the character responds", async () => {
