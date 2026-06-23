@@ -1,0 +1,10 @@
+{
+  "sceneId": "court_conflict_001",
+  "setting": "imperial court meeting",
+  "topic": "border military funding allocation",
+  "currentStage": "capital_mid_stage",
+  "participants": ["emperor", "fan_xian", "chen_pingping"],
+  "initialConflict": "The funding topic is used by multiple factions to test the spy bureau and imperial authority.",
+  "maxTurns": 3
+}
+

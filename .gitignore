@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build output
+dist/
+
+# Runtime state
+.novaltips/
+
+# Environment variables
+.env
+
+# Python
+.pytest_cache/
+__pycache__/
+*.pyc
+venv/
+
+# Legacy files (not part of NovelTips Pi project)
+novel-agent-harness/
+面试问答_长篇网文Agent项目_庆余年案例.md
+证明图片.png
+idea.txt
+technical_spec.md
+
+# Internal docs
+docs/superpowers/
+
+# Agent configuration
+.agents/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
