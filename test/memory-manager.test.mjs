@@ -218,3 +218,101 @@ test("LongTermMemory stores to different characters independently", async () => 
   assert.equal(r1[0].content, "char1 mem");
   assert.equal(r2[0].content, "char2 mem");
 });
+
+import { MemoryManager, createMemoryManager } from "../bin/lib/memory-manager.mjs";
+
+test("MemoryManager routes low-importance to short-term", async () => {
+  const store = new MockStore();
+  store.skills = [];
+  store.getSkill = async () => undefined;
+  const mm = new MemoryManager({ worldStore: store });
+  const result = await mm.remember("c1", { content: "trivial", importance: 1 }, "s1");
+  assert.equal(result.layer, "short-term");
+  const recent = mm.shortTerm.getRecent("s1", 10);
+  assert.equal(recent.length, 1);
+  assert.equal(recent[0].content, "trivial");
+});
+
+test("MemoryManager routes high-importance to long-term", async () => {
+  const store = new MockStore();
+  store.getSkill = async () => undefined;
+  const mm = new MemoryManager({ worldStore: store });
+  const result = await mm.remember("c1", { content: "critical", importance: 5 });
+  assert.equal(result.layer, "long-term");
+  assert.ok(result.id.startsWith("ltm_"));
+});
+
+test("MemoryManager recall gathers all three layers", async () => {
+  const store = new MockStore();
+  store.getSkill = async (id) =>
+    id === "c1" ? { characterId: "c1", name: "Alice", voice: ["calm"], knownFacts: ["f1"] } : undefined;
+  const mm = new MemoryManager({ worldStore: store });
+  await mm.remember("c1", { content: "session note", importance: 1 }, "s1");
+  await mm.remember("c1", { content: "important event", importance: 4 });
+  const results = await mm.recall("c1", { sessionId: "s1" });
+  assert.equal(results.shortTerm.length, 1);
+  assert.equal(results.shortTerm[0].content, "session note");
+  assert.equal(results.longTerm.length, 1);
+  assert.equal(results.longTerm[0].content, "important event");
+  assert.equal(results.semantic.name, "Alice");
+});
+
+test("MemoryManager mergeMemories deduplicates and orders correctly", async () => {
+  const store = new MockStore();
+  const mm = new MemoryManager({ worldStore: store });
+  const results = {
+    shortTerm: [{ content: "shared", text: "shared" }, { content: "only-st", text: "only-st" }],
+    longTerm: [{ content: "shared" }, { content: "only-lt" }],
+    semantic: { characterId: "c1", name: "Bob", relationships: { c2: "friend" } }
+  };
+  const merged = mm.mergeMemories(results);
+  assert.equal(merged.length, 4);
+  assert.equal(merged[0].type, "semantic");
+  const contents = merged.map((m) => m.content);
+  assert.ok(contents.includes("shared"));
+  assert.ok(contents.includes("only-st"));
+  assert.ok(contents.includes("only-lt"));
+  const sharedCount = contents.filter((c) => c === "shared").length;
+  assert.equal(sharedCount, 1);
+});
+
+test("MemoryManager getContextSummary returns formatted text", async () => {
+  const store = new MockStore();
+  store.getSkill = async () => ({
+    characterId: "c1",
+    name: "Alice",
+    identity: ["warrior"],
+    voice: ["stern"],
+    values: ["honor"],
+    relationships: { c2: "rival" },
+    knownFacts: ["f1", "f2"],
+    behaviorPolicy: { greeting: "nods curtly" }
+  });
+  const mm = new MemoryManager({ worldStore: store });
+  await mm.remember("c1", { content: "saved the village", importance: 4 }, "s1");
+  mm.shortTerm.addEntry("s1", { text: "arrived at the tavern", content: "arrived at the tavern" });
+  const summary = await mm.getContextSummary("c1", "s1");
+  assert.ok(summary.includes("[Character Profile]"));
+  assert.ok(summary.includes("Alice"));
+  assert.ok(summary.includes("[Important Memories]"));
+  assert.ok(summary.includes("saved the village"));
+  assert.ok(summary.includes("[Recent Context]"));
+  assert.ok(summary.includes("arrived at the tavern"));
+});
+
+test("MemoryManager clearSession removes session data", async () => {
+  const store = new MockStore();
+  store.getSkill = async () => undefined;
+  const mm = new MemoryManager({ worldStore: store });
+  await mm.remember("c1", { content: "temp", importance: 1 }, "s1");
+  assert.equal(mm.shortTerm.getRecent("s1", 10).length, 1);
+  mm.clearSession("s1");
+  assert.equal(mm.shortTerm.getRecent("s1", 10).length, 0);
+});
+
+test("createMemoryManager returns MemoryManager instance", () => {
+  const store = new MockStore();
+  const mm = createMemoryManager({ worldStore: store });
+  assert.ok(mm instanceof MemoryManager);
+  assert.ok(mm.shortTerm instanceof ShortTermMemory);
+});
