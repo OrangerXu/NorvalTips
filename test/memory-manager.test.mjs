@@ -1,6 +1,55 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ShortTermMemory, globalShortTermMemory } from "../bin/lib/memory-shortterm.mjs";
+import { LongTermMemory } from "../bin/lib/memory-longterm.mjs";
+
+class MockStore {
+  constructor() {
+    this.nodes = new Map();
+    this.statements = [];
+  }
+
+  async run(statement, parameters = {}) {
+    this.statements.push({ statement, parameters });
+    const params = parameters;
+
+    if (statement.includes("CREATE CONSTRAINT") || statement.includes("CREATE INDEX")) {
+      return [];
+    }
+
+    if (statement.includes("MERGE (m:Memory")) {
+      const id = params.id;
+      this.nodes.set(id, { ...params });
+      return [];
+    }
+
+    if (statement.includes("MATCH (m:Memory")) {
+      const results = [];
+      for (const [, node] of this.nodes) {
+        if (node.characterId !== params.characterId) continue;
+        if (params.minImportance && Number(node.importance) < Number(params.minImportance)) continue;
+        if (params.relatedCharacterId && !(node.relatedCharacters ?? []).includes(params.relatedCharacterId)) continue;
+        results.push({ row: [JSON.stringify(node)] });
+      }
+      if (statement.includes("ORDER BY m.timestamp ASC")) {
+        results.sort((a, b) => {
+          const mA = JSON.parse(a.row[0]);
+          const mB = JSON.parse(b.row[0]);
+          return mA.timestamp - mB.timestamp;
+        });
+      } else if (statement.includes("ORDER BY m.timestamp DESC")) {
+        results.sort((a, b) => {
+          const mA = JSON.parse(a.row[0]);
+          const mB = JSON.parse(b.row[0]);
+          return mB.timestamp - mA.timestamp;
+        });
+      }
+      return results;
+    }
+
+    return [];
+  }
+}
 
 test("adds and retrieves entries", () => {
   const mem = new ShortTermMemory();
@@ -72,4 +121,100 @@ test("getSummary returns null for new session", () => {
 
 test("globalShortTermMemory is a ShortTermMemory instance", () => {
   assert.ok(globalShortTermMemory instanceof ShortTermMemory);
+});
+
+test("LongTermMemory initSchema runs constraints", async () => {
+  const store = new MockStore();
+  const ltm = new LongTermMemory(store);
+  await ltm.initSchema();
+  assert.ok(store.statements.length >= 4);
+  assert.ok(store.statements[0].statement.includes("CREATE CONSTRAINT"));
+});
+
+test("LongTermMemory addMemory stores record", async () => {
+  const store = new MockStore();
+  const ltm = new LongTermMemory(store);
+  const mem = await ltm.addMemory("char1", { content: "hello world" });
+  assert.ok(mem.id.startsWith("ltm_"));
+  assert.equal(mem.characterId, "char1");
+  assert.equal(mem.content, "hello world");
+  assert.equal(mem.importance, 3);
+  assert.equal(mem.emotionalValence, 0);
+  assert.ok(store.nodes.has(mem.id));
+});
+
+test("LongTermMemory addMemory clamps fields", async () => {
+  const store = new MockStore();
+  const ltm = new LongTermMemory(store);
+  const mem = await ltm.addMemory("c1", {
+    content: "test",
+    emotionalValence: 2,
+    importance: -5
+  });
+  assert.equal(mem.emotionalValence, 1);
+  assert.equal(mem.importance, 1);
+});
+
+test("LongTermMemory retrieveMemories returns by importance", async () => {
+  const store = new MockStore();
+  const ltm = new LongTermMemory(store);
+  await ltm.addMemory("c1", { content: "low imp", importance: 1 });
+  await ltm.addMemory("c1", { content: "high imp", importance: 5 });
+  const results = await ltm.retrieveMemories("c1", { minImportance: 3 });
+  assert.equal(results.length, 1);
+  assert.equal(results[0].content, "high imp");
+});
+
+test("LongTermMemory retrieveMemories limits results", async () => {
+  const store = new MockStore();
+  const ltm = new LongTermMemory(store);
+  for (let i = 0; i < 5; i++) {
+    await ltm.addMemory("c1", { content: `mem-${i}`, importance: 3 });
+  }
+  const results = await ltm.retrieveMemories("c1", { limit: 2 });
+  assert.equal(results.length, 2);
+});
+
+test("LongTermMemory computeScore returns weighted result", async () => {
+  const store = new MockStore();
+  const ltm = new LongTermMemory(store);
+  const mem = { content: "test", importance: 5, timestamp: Date.now() };
+  const score = ltm.computeScore(mem, "test");
+  assert.ok(score > 0 && score <= 1);
+});
+
+test("LongTermMemory getCharacterTimeline returns chronological order", async () => {
+  const store = new MockStore();
+  const ltm = new LongTermMemory(store);
+  await ltm.addMemory("c1", { content: "first", timestamp: 100 });
+  await ltm.addMemory("c1", { content: "third", timestamp: 300 });
+  await ltm.addMemory("c1", { content: "second", timestamp: 200 });
+  const timeline = await ltm.getCharacterTimeline("c1");
+  assert.equal(timeline.length, 3);
+  assert.equal(timeline[0].content, "first");
+  assert.equal(timeline[2].content, "third");
+});
+
+test("LongTermMemory getRelatedCharacterMemories filters by related", async () => {
+  const store = new MockStore();
+  const ltm = new LongTermMemory(store);
+  await ltm.addMemory("c1", { content: "about c2", relatedCharacters: ["c2"] });
+  await ltm.addMemory("c1", { content: "about c3", relatedCharacters: ["c3"] });
+  await ltm.addMemory("c1", { content: "no related", relatedCharacters: [] });
+  const results = await ltm.getRelatedCharacterMemories("c1", "c2");
+  assert.equal(results.length, 1);
+  assert.equal(results[0].content, "about c2");
+});
+
+test("LongTermMemory stores to different characters independently", async () => {
+  const store = new MockStore();
+  const ltm = new LongTermMemory(store);
+  await ltm.addMemory("c1", { content: "char1 mem" });
+  await ltm.addMemory("c2", { content: "char2 mem" });
+  const r1 = await ltm.retrieveMemories("c1");
+  const r2 = await ltm.retrieveMemories("c2");
+  assert.equal(r1.length, 1);
+  assert.equal(r2.length, 1);
+  assert.equal(r1[0].content, "char1 mem");
+  assert.equal(r2[0].content, "char2 mem");
 });
